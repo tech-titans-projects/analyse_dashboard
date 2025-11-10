@@ -1,0 +1,5 @@
+{
+  "name": "Sentiment Analysis Dashboard",
+  "description": "An interactive dashboard to analyze sentiment in text data using the Gemini API. It supports direct text input and file uploads, provides multi-class sentiment classification, confidence scores, keyword extraction, and visualizes the results.",
+  "requestFramePermissions": []
+}
