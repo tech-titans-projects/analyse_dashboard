@@ -1,7 +1,52 @@
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { TextIcon } from './icons/TextIcon';
 import { FileIcon } from './icons/FileIcon';
+import { MicrophoneIcon } from './icons/MicrophoneIcon';
+
+// --- Types for SpeechRecognition API ---
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start(): void;
+  stop(): void;
+  onresult: (event: SpeechRecognitionEvent) => void;
+  onerror: (event: SpeechRecognitionErrorEvent) => void;
+  onend: () => void;
+}
+
+interface SpeechRecognitionEvent extends Event {
+  results: SpeechRecognitionResultList;
+  resultIndex: number;
+}
+
+interface SpeechRecognitionResultList {
+  [index: number]: SpeechRecognitionResult;
+  length: number;
+}
+
+interface SpeechRecognitionResult extends Array<SpeechRecognitionAlternative> {
+  isFinal: boolean;
+}
+
+interface SpeechRecognitionAlternative {
+  transcript: string;
+  confidence: number;
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string;
+}
+
+declare global {
+  interface Window {
+    SpeechRecognition: { new(): SpeechRecognition; };
+    webkitSpeechRecognition: { new(): SpeechRecognition; };
+  }
+}
+// --- End Types ---
+
 
 interface InputAreaProps {
   onAnalyze: (texts: string[]) => void;
@@ -12,11 +57,94 @@ const InputArea: React.FC<InputAreaProps> = ({ onAnalyze, isLoading }) => {
   const [activeTab, setActiveTab] = useState<'text' | 'file'>('text');
   const [textInput, setTextInput] = useState('');
   const [fileName, setFileName] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+  const [isSpeechApiSupported, setIsSpeechApiSupported] = useState(true);
+  const [speechError, setSpeechError] = useState<string | null>(null);
+
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const finalTranscriptRef = useRef<string>('');
+
+  useEffect(() => {
+    const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognitionAPI) {
+      setIsSpeechApiSupported(false);
+      return;
+    }
+
+    const recognition = new SpeechRecognitionAPI();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      let interimTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscriptRef.current += event.results[i][0].transcript;
+        } else {
+          interimTranscript += event.results[i][0].transcript;
+        }
+      }
+      setTextInput(finalTranscriptRef.current + interimTranscript);
+    };
+
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      console.error('Speech recognition error:', event.error);
+      let errorMessage = `An error occurred: ${event.error}. Please try again.`;
+      switch (event.error) {
+        case 'no-speech':
+          errorMessage = 'No speech was detected. Please make sure your microphone is active and try speaking again.';
+          break;
+        case 'audio-capture':
+          errorMessage = 'Microphone problem. Please check your microphone connection and system settings.';
+          break;
+        case 'not-allowed':
+          errorMessage = 'Permission denied. Please allow microphone access in your browser settings to use this feature.';
+          break;
+      }
+      setSpeechError(errorMessage);
+      setIsRecording(false);
+    };
+    
+    recognition.onend = () => {
+      // Format the final transcript into separate lines for analysis
+      if (finalTranscriptRef.current) {
+         setTextInput(prev => prev.trim().replace(/(\.|\?|!) /g, '$1\n').trim());
+      }
+      setIsRecording(false);
+    };
+
+    recognitionRef.current = recognition;
+
+    return () => {
+        if (recognitionRef.current) {
+            recognitionRef.current.onresult = null;
+            recognitionRef.current.onerror = null;
+            recognitionRef.current.onend = null;
+            recognitionRef.current.stop();
+        }
+    }
+  }, []);
+
+  const handleToggleRecording = () => {
+    if (isLoading) return;
+    setSpeechError(null);
+    if (isRecording) {
+      recognitionRef.current?.stop();
+    } else {
+      setTextInput('');
+      finalTranscriptRef.current = '';
+      recognitionRef.current?.start();
+      setIsRecording(true);
+    }
+  };
+
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       setFileName(file.name);
+      setSpeechError(null);
       const reader = new FileReader();
       reader.onload = (e) => {
         const content = e.target?.result as string;
@@ -31,10 +159,21 @@ const InputArea: React.FC<InputAreaProps> = ({ onAnalyze, isLoading }) => {
     onAnalyze(texts);
   };
 
-  // Fix: Use React.ReactElement to solve "Cannot find namespace 'JSX'".
+  const handleTabChange = (id: 'text' | 'file') => {
+    if (activeTab === id) return;
+    
+    if (isRecording) {
+      recognitionRef.current?.stop();
+    }
+    setTextInput('');
+    setFileName('');
+    setSpeechError(null);
+    setActiveTab(id);
+  }
+
   const TabButton = useCallback(({ id, label, icon }: { id: 'text' | 'file', label: string, icon: React.ReactElement }) => (
     <button
-      onClick={() => setActiveTab(id)}
+      onClick={() => handleTabChange(id)}
       className={`flex items-center space-x-2 px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors duration-200 ${
         activeTab === id
           ? 'border-blue-500 text-blue-600 dark:text-blue-400'
@@ -44,7 +183,7 @@ const InputArea: React.FC<InputAreaProps> = ({ onAnalyze, isLoading }) => {
       {icon}
       <span>{label}</span>
     </button>
-  ), [activeTab]);
+  ), [activeTab, isRecording]);
 
 
   return (
@@ -58,17 +197,40 @@ const InputArea: React.FC<InputAreaProps> = ({ onAnalyze, isLoading }) => {
 
       <div className="mt-6">
         {activeTab === 'text' && (
-          <textarea
-            value={textInput}
-            onChange={(e) => setTextInput(e.target.value)}
-            placeholder="Enter text here, one entry per line...
-For example:
-The service was excellent, I am very happy!
-The product broke after just one week.
-This is a standard product, nothing special."
-            className="w-full h-48 p-3 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-gray-50 dark:bg-gray-700"
-            disabled={isLoading}
-          />
+          <div>
+            <div className="relative">
+                 <textarea
+                    value={textInput}
+                    onChange={(e) => {
+                      setTextInput(e.target.value)
+                      setSpeechError(null);
+                    }}
+                    placeholder={isRecording ? "Listening..." : "Enter text here, one entry per line, or use the microphone..."}
+                    className="w-full h-48 p-3 pr-14 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-gray-50 dark:bg-gray-700"
+                    disabled={isLoading || isRecording}
+                 />
+                 {isSpeechApiSupported && (
+                    <button 
+                        onClick={handleToggleRecording} 
+                        disabled={isLoading}
+                        className={`absolute top-3 right-3 p-2 rounded-full transition-all duration-300 transform focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 ${isRecording ? 'bg-red-500 text-white animate-pulse' : 'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-500'}`}
+                        aria-label={isRecording ? 'Stop recording' : 'Start voice input'}
+                    >
+                        <MicrophoneIcon />
+                    </button>
+                 )}
+            </div>
+             {speechError && !isRecording && (
+                <p className="text-xs text-red-600 dark:text-red-400 mt-2" role="alert">
+                    {speechError}
+                </p>
+             )}
+             {!isSpeechApiSupported && (
+                <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-2">
+                    Voice input is not supported by your browser. Try Chrome or Edge.
+                </p>
+            )}
+          </div>
         )}
         {activeTab === 'file' && (
           <div className="flex items-center justify-center w-full">
