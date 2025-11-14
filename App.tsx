@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import InputArea from './components/InputArea';
 import ResultsDashboard from './components/ResultsDashboard';
@@ -7,12 +7,31 @@ import { analyzeSentiment } from './services/geminiService';
 import { AnalysisResult } from './types';
 
 type View = 'input' | 'results';
+type Theme = 'light' | 'dark';
 
 const App: React.FC = () => {
   const [analysisResults, setAnalysisResults] = useState<AnalysisResult[] | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<View>('input');
+  const [theme, setTheme] = useState<Theme>(() => {
+    const savedTheme = localStorage.getItem('theme') as Theme;
+    // Use saved theme or default to 'light'. Do not use system preference.
+    if (savedTheme === 'light' || savedTheme === 'dark') {
+      return savedTheme;
+    }
+    return 'light';
+  });
+
+  useEffect(() => {
+    const root = window.document.documentElement;
+    if (theme === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+    localStorage.setItem('theme', theme);
+  }, [theme]);
 
   const handleAnalyze = async (texts: string[]) => {
     if (texts.length === 0) {
@@ -41,6 +60,12 @@ const App: React.FC = () => {
       setError(null); // Clear errors when manually switching tabs
       setActiveView(view);
     }
+  };
+
+  const handleClearResults = () => {
+    setAnalysisResults(null);
+    setActiveView('input');
+    setError(null);
   };
 
   const getTabClassName = (view: View) => {
@@ -112,7 +137,7 @@ const App: React.FC = () => {
               )}
 
               {analysisResults && !isLoading && (
-                <ResultsDashboard results={analysisResults} />
+                <ResultsDashboard results={analysisResults} onClear={handleClearResults} />
               )}
             </div>
           )}

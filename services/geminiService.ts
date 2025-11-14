@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { AnalysisResult } from '../types';
 
@@ -83,5 +82,54 @@ export const analyzeSentiment = async (texts: string[]): Promise<AnalysisResult[
   } catch (error) {
     console.error("Gemini API call failed:", error);
     throw new Error("Failed to analyze sentiment. The API returned an error or an invalid format.");
+  }
+};
+
+const suggestionsSchema = {
+  type: Type.OBJECT,
+  properties: {
+    suggestions: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+      description: "An array of spelling suggestions. Should be empty if the original word is correct."
+    }
+  },
+  required: ['suggestions'],
+};
+
+export const getSpellingSuggestions = async (word: string): Promise<string[]> => {
+  if (!word || word.length < 2) {
+    return [];
+  }
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const prompt = `
+    Provide up to 5 correct English spelling suggestions for the word "${word}".
+    If the word is already spelled correctly, return an empty array for "suggestions".
+    Only provide suggestions, do not provide any explanation.
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: suggestionsSchema,
+        temperature: 0.2, // We want deterministic, likely suggestions
+      },
+    });
+
+    const jsonString = response.text.trim();
+    const parsedJson = JSON.parse(jsonString);
+    
+    if (parsedJson.suggestions && Array.isArray(parsedJson.suggestions)) {
+      return parsedJson.suggestions;
+    }
+    return [];
+
+  } catch (error) {
+    console.error("Gemini API call for suggestions failed:", error);
+    // Don't throw, just return empty array for graceful degradation
+    return [];
   }
 };

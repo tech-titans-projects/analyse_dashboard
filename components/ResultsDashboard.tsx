@@ -7,15 +7,16 @@ import ExportControls from './ExportControls';
 
 interface ResultsDashboardProps {
   results: AnalysisResult[];
+  onClear: () => void;
 }
 
-const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ results }) => {
+const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ results, onClear }) => {
   return (
     <div className="space-y-8">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+        <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-6">
             <div className="flex justify-between items-center mb-4">
                 <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Analysis Results</h2>
-                <ExportControls data={results} />
+                <ExportControls data={results} onClear={onClear} />
             </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
