@@ -266,10 +266,9 @@ const InputArea: React.FC<InputAreaProps> = ({ onAnalyze, isLoading }) => {
         })
         .catch(error => {
           console.error("Error reading files:", error);
-          // FIX: Safely handle the 'unknown' error type from a promise rejection.
-          // By checking if 'error' is an instance of Error, we can securely access its
-          // properties. This prevents runtime errors from attempting to access properties
-          // on an object that may not have them.
+          // Fix: Type-guard the caught error to safely access its message property.
+          // An error in a catch block is of type 'unknown' and cannot be used directly. This
+          // also resolves the second error, which was likely caused by the same mishandled object.
           let message = "An error occurred while reading the files. Please ensure they are valid text files.";
           if (error instanceof Error) {
             message = error.message;

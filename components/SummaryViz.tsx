@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Label
+  BarChart, Bar, XAxis, YAxis, CartesianGrid
 } from 'recharts';
 import { AnalysisResult, Sentiment } from '../types';
 
@@ -15,7 +15,7 @@ const COLORS = {
   [Sentiment.Neutral]: '#6B7280',  // Gray 500
 };
 
-type ChartType = 'pie' | 'bar' | 'histogram';
+type ChartType = 'pie' | 'bar';
 
 const SummaryViz: React.FC<SummaryVizProps> = ({ results }) => {
   const [chartType, setChartType] = useState<ChartType>('pie');
@@ -31,23 +31,6 @@ const SummaryViz: React.FC<SummaryVizProps> = ({ results }) => {
     });
     return Object.entries(counts).map(([name, value]) => ({ name, value }));
   }, [results]);
-
-  const confidenceHistogramData = useMemo(() => {
-      const binCount = 10;
-      const bins = Array.from({ length: binCount }, (_, i) => ({
-        name: `${(i * 10)}%-${((i + 1) * 10)}%`,
-        count: 0,
-      }));
-
-      results.forEach(result => {
-        // handle confidence of 1.0 correctly
-        const binIndex = Math.min(Math.floor(result.confidence * binCount), binCount - 1);
-        if (bins[binIndex]) {
-          bins[binIndex].count++;
-        }
-      });
-      return bins;
-    }, [results]);
 
   const getButtonClass = (type: ChartType) => {
     const baseClasses = "px-3 py-1 text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800 transition-colors";
@@ -121,28 +104,6 @@ const SummaryViz: React.FC<SummaryVizProps> = ({ results }) => {
                   </Bar>
                 </BarChart>
             );
-        case 'histogram':
-            return (
-                <BarChart data={confidenceHistogramData} margin={{ top: 5, right: 20, left: -10, bottom: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.3} />
-                    <XAxis dataKey="name">
-                         <Label value="Confidence Score" offset={-15} position="insideBottom" />
-                    </XAxis>
-                    <YAxis allowDecimals={false}>
-                        <Label value="Count" angle={-90} position="insideLeft" style={{ textAnchor: 'middle' }} />
-                    </YAxis>
-                    <Tooltip
-                        contentStyle={{
-                            backgroundColor: 'rgba(31, 41, 55, 0.8)',
-                            borderColor: '#4B5563',
-                            borderRadius: '0.5rem'
-                        }}
-                        itemStyle={{ color: '#F9FAFB' }}
-                        cursor={{fill: 'rgba(128, 128, 128, 0.1)'}}
-                    />
-                    <Bar dataKey="count" fill="#8884d8" name="Frequency" />
-                </BarChart>
-            );
         default:
             return null;
     }
@@ -152,7 +113,7 @@ const SummaryViz: React.FC<SummaryVizProps> = ({ results }) => {
   return (
     <div>
       <h3 className="text-lg font-semibold text-center mb-2 dark:text-gray-200">
-        {chartType === 'histogram' ? 'Confidence Score Distribution' : 'Sentiment Distribution'}
+        Sentiment Distribution
       </h3>
       <div className="flex justify-center space-x-2 mb-4">
         <button onClick={() => setChartType('pie')} className={getButtonClass('pie')}>
@@ -160,9 +121,6 @@ const SummaryViz: React.FC<SummaryVizProps> = ({ results }) => {
         </button>
         <button onClick={() => setChartType('bar')} className={getButtonClass('bar')}>
           Bar Chart
-        </button>
-        <button onClick={() => setChartType('histogram')} className={getButtonClass('histogram')}>
-          Histogram
         </button>
       </div>
       <div className="h-72 w-full">
