@@ -144,7 +144,7 @@ const App: React.FC = () => {
         </div>
       </main>
       <footer className="text-center p-4 text-gray-500 text-sm">
-        <p>Sentiment Analysis Dashboard powered by Gemini</p>
+        <p>Tech Titans Sentiment Analysis Dashboard powered by Gemini</p>
       </footer>
     </div>
   );
